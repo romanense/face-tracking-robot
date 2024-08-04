@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Face Tracking Robot</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: #000;
+            color: #fff;
+        }
+        #robot {
+            position: relative;
+        }
+        #eyes {
+            position: absolute;
+            top: 30%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .eye {
+            width: 50px;
+            height: 50px;
+            background: #fff;
+            border-radius: 50%;
+            position: absolute;
+        }
+        .pupil {
+            width: 20px;
+            height: 20px;
+            background: #000;
+            border-radius: 50%;
+            position: absolute;
+            top: 15px;
+            left: 15px;
+        }
+        #mouth {
+            position: absolute;
+            top: 60%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        video {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="robot">
+        <div id="eyes">
+            <div class="eye" id="leftEye">
+                <div class="pupil" id="leftPupil"></div>
+            </div>
+            <div class="eye" id="rightEye">
+                <div class="pupil" id="rightPupil"></div>
+            </div>
+        </div>
+        <div id="mouth">😊</div>
+    </div>
+    <video id="video" width="640" height="480" autoplay></video>
+    <script defer src="https://unpkg.com/face-api.js"></script>
+    <script>
+        async function setupCamera() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            const video = document.getElementById('video');
+            video.srcObject = stream;
+            return new Promise((resolve) => {
+                video.onloadedmetadata = () => {
+                    resolve(video);
+                };
+            });
+        }
+
+        async function loadModels() {
+            await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+            await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+        }
+
+        function updateEyes(eye, pupil, x, y) {
+            const rect = eye.getBoundingClientRect();
+            const eyeX = rect.left + rect.width / 2;
+            const eyeY = rect.top + rect.height / 2;
+
+            const dx = x - eyeX;
+            const dy = y - eyeY;
+
+            const angle = Math.atan2(dy, dx);
+            const radius = Math.min(rect.width / 4, Math.sqrt(dx * dx + dy * dy));
+
+            const pupilX = radius * Math.cos(angle);
+            const pupilY = radius * Math.sin(angle);
+
+            pupil.style.transform = `translate(${pupilX}px, ${pupilY}px)`;
+        }
+
+        function startFaceDetection(video) {
+            const displaySize = { width: video.width, height: video.height };
+            faceapi.matchDimensions(video, displaySize);
+
+            setInterval(async () => {
+                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+                if (detections.length > 0) {
+                    const { x, y } = detections[0].landmarks.getNose()[3];
+                    const leftPupil = document.getElementById('leftPupil');
+                    const rightPupil = document.getElementById('rightPupil');
+                    const leftEye = document.getElementById('leftEye');
+                    const rightEye = document.getElementById('rightEye');
+                    updateEyes(leftEye, leftPupil, x, y);
+                    updateEyes(rightEye, rightPupil, x, y);
+                }
+            }, 100);
+        }
+
+        async function start() {
+            await loadModels();
+            const video = await setupCamera();
+            video.play();
+            startFaceDetection(video);
+        }
+
+        start();
+    </script>
+</body>
+</html>
